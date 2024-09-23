@@ -1,8 +1,9 @@
 import { EventType } from '../index.js';
-import { type RecordWithPlaintext } from '@puzzlehq/types';
+import { Network, type RecordWithPlaintext } from '@puzzlehq/types';
 export type CreateEventRequestData = {
     address?: string;
     type: EventType;
+    network?: Network;
     programId: string;
     functionId: string;
     fee: number;
@@ -13,6 +14,7 @@ export type CreateEventRequestData = {
 export type CreateEventRequest = {
     address?: string;
     type: EventType;
+    network?: Network;
     programId: string;
     functionId: string;
     fee: number;
@@ -24,4 +26,4 @@ export type CreateEventResponse = {
     eventId?: string;
     error?: string;
 };
-export declare const requestCreateEvent: (requestData: CreateEventRequestData, network?: string) => Promise<CreateEventResponse>;
+export declare const requestCreateEvent: (requestData: CreateEventRequestData, network?: Network) => Promise<CreateEventResponse>;

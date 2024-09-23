@@ -20,7 +20,7 @@ type UseEventParams = {
 
 export const useEvent = ({ id, address, multisig = false }: UseEventParams) => {
   const session: SessionTypes.Struct | undefined = useWalletSession();
-  const [account] = useWalletStore((state) => [state.account]);
+  const [selectedAddress, chainIdStr] = useWalletStore((state) => [state.address, state.chainIdStr]);
 
   const useQueryFunction = hasInjectedConnection()
     ? useInjectedRequestQuery
@@ -28,7 +28,7 @@ export const useEvent = ({ id, address, multisig = false }: UseEventParams) => {
 
   const query = {
     topic: session?.topic,
-    chainId: account ? `${account.network}:${account.chainId}` : 'aleo:1',
+    chainId: chainIdStr,
     request: {
       jsonrpc: '2.0',
       method: 'getEvent',
@@ -43,7 +43,7 @@ export const useEvent = ({ id, address, multisig = false }: UseEventParams) => {
     id !== undefined &&
     id !== '' &&
     !!session &&
-    !!account &&
+    !!selectedAddress &&
     (multisig ? !!address : true);
 
   const {
@@ -54,7 +54,8 @@ export const useEvent = ({ id, address, multisig = false }: UseEventParams) => {
   } = useQueryFunction<GetEventResponse | undefined>({
     queryKey: [
       'useEvent',
-      account?.address,
+      selectedAddress,
+      chainIdStr,
       address,
       multisig,
       id,
@@ -108,7 +109,7 @@ export const useEvent = ({ id, address, multisig = false }: UseEventParams) => {
 
   // send initial events request
   const readyToRequest =
-    !!session && !!account && !!id && (multisig ? !!address : true);
+    !!session && !!selectedAddress && !!id && (multisig ? !!address : true);
   useEffect(() => {
     if (readyToRequest && !loading) {
       refetch();

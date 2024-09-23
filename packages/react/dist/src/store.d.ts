@@ -1,9 +1,10 @@
-import { PuzzleAccount } from '@puzzlehq/sdk-core';
+import { Network } from '@puzzlehq/types';
 type WalletState = {
-    account?: PuzzleAccount;
-    chainId?: string;
-    setAccount: (account: PuzzleAccount | undefined) => void;
-    setChainId: (chainId: string) => void;
+    address?: string;
+    network?: Network;
+    chainIdStr?: string;
+    setAddress: (address: string | undefined) => void;
+    setNetwork: (network: Network | undefined) => void;
     onDisconnect: () => void;
 };
 export declare const useWalletStore: import("zustand").UseBoundStore<Omit<import("zustand").StoreApi<WalletState>, "persist"> & {

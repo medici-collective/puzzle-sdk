@@ -1,19 +1,26 @@
 import { create } from 'zustand';
 import { queryClient } from './index.js';
 import { persist } from 'zustand/middleware';
+import { networkToChainId } from '@puzzlehq/sdk-core';
 export const useWalletStore = create()(persist((set, get) => ({
     account: undefined,
-    chainId: 'aleo:1',
-    setAccount: (account) => {
-        set({ account });
+    chainIdStr: undefined,
+    network: undefined,
+    setAddress: (address) => {
+        set({ address });
     },
-    setChainId: (chainId) => {
-        set({ chainId });
+    setNetwork: (network) => {
+        const chainIdStr = network ? networkToChainId(network) : undefined;
+        set({
+            network,
+            chainIdStr
+        });
     },
     onDisconnect: () => {
         set({
-            account: undefined,
-            chainId: undefined,
+            address: undefined,
+            chainIdStr: undefined,
+            network: undefined,
         });
         queryClient.clear();
         localStorage.removeItem('puzzle-hasInjectedConnection');

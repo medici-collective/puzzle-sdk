@@ -5,15 +5,15 @@ import { useInjectedRequestQuery, useRequestQuery } from './wc/useRequest.js';
 import { useWalletStore } from '../store.js';
 import useInjectedSubscriptions from './utils/useInjectedSubscription.js';
 import { useWalletSession } from '../provider/PuzzleWalletProvider.js';
-export const useBalance = ({ address, multisig } = {}) => {
+export const useBalance = ({ address, multisig, network } = {}) => {
     const session = useWalletSession();
-    const [account] = useWalletStore((state) => [state.account]);
+    const [selectedAddress, chainIdStr] = useWalletStore((state) => [state.address, state.chainIdStr]);
     const useQueryFunction = hasInjectedConnection()
         ? useInjectedRequestQuery
         : useRequestQuery;
     const query = {
         topic: session?.topic,
-        chainId: account ? `${account.network}:${account.chainId}` : 'aleo:1',
+        chainId: chainIdStr,
         request: {
             jsonrpc: '2.0',
             method: 'getBalance',
@@ -26,11 +26,12 @@ export const useBalance = ({ address, multisig } = {}) => {
         queryKey: [
             'useBalance',
             address,
-            account?.address ?? '',
+            chainIdStr,
+            selectedAddress,
             multisig,
             session?.topic,
         ],
-        enabled: !!session && !!account && (multisig ? !!address : true),
+        enabled: !!session && !!selectedAddress && (multisig ? !!address : true),
         fetchFunction: async () => {
             const response = await window.aleo.puzzleWalletClient.getBalance.query(query);
             return response;

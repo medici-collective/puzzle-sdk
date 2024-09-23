@@ -6,22 +6,25 @@ import {
   checkForDesktopConnection,
   wc_aleo_methods,
   wc_events,
-  wc_required_aleo_chains,
-  wc_optional_aleo_chains,
+  getAleoMethods,
+  getAleoChains,
+  ConnectProps,
+  Network,
+  chainIdToNetwork,
 } from '@puzzlehq/sdk-core';
 import { useAsyncAction } from './wc/_useAsyncAction.js';
 import { useWalletStore } from '../store.js';
-import { shortenAddress } from './useAccount.js';
 import { useWalletSession } from '../provider/PuzzleWalletProvider.js';
 
 type Data = Awaited<ReturnType<WalletConnectModalSignInstance['connect']>>;
 
-export function useConnect(showModal = true) {
+export function useConnect({ programIds, showModal }: ConnectProps) {
+  const networks = Object.keys(programIds) as Network[];
   const session: SessionTypes.Struct | undefined = useWalletSession();
   const isConnected = !!session;
   const { data, error, loading, setData, setError, setLoading } =
     useAsyncAction<Data>();
-  const [setAccount] = useWalletStore((state) => [state.setAccount]);
+  const [setAddress, setNetwork] = useWalletStore((state) => [state.setAddress, state.setNetwork]);
 
   async function connect() {
     try {
@@ -32,15 +35,8 @@ export function useConnect(showModal = true) {
         {
           requiredNamespaces: {
             aleo: {
-              methods: wc_aleo_methods,
-              chains: wc_required_aleo_chains,
-              events: wc_events,
-            },
-          },
-          optionalNamespaces: {
-            aleo: {
-              chains: wc_optional_aleo_chains,
-              methods: wc_aleo_methods,
+              methods: getAleoMethods(programIds),
+              chains: getAleoChains(networks),
               events: wc_events,
             },
           },
@@ -49,13 +45,17 @@ export function useConnect(showModal = true) {
       );
       setData(response);
       await checkForDesktopConnection(response.topic);
-      const account = response.namespaces['aleo']['accounts'][0].split(':');
-      setAccount({
-        network: account[0],
-        chainId: account[1],
-        address: account[2],
-        shortenedAddress: shortenAddress(account[2]),
-      });
+
+      const accounts = response.namespaces.aleo.accounts;
+      console.log('wc_accounts', accounts);
+      const split = accounts[0].split(':');
+      const wcNetwork = split[0]
+      const chainId = split[1];
+      const address = split[2];
+      const chainStr = `${wcNetwork}:${chainId}`;
+      const network = chainIdToNetwork(chainStr);
+      setAddress(address);
+      setNetwork(network);
       emitter.emit('session_change');
 
       const choice = window.localStorage.getItem(

@@ -1,14 +1,16 @@
 import { create } from 'zustand';
 import { queryClient } from './index.js';
 import { persist } from 'zustand/middleware';
-import { PuzzleAccount } from '@puzzlehq/sdk-core';
+import { networkToChainId } from '@puzzlehq/sdk-core';
+import { Network } from '@puzzlehq/types';
 
 type WalletState = {
-  account?: PuzzleAccount;
-  chainId?: string;
+  address?: string;
+  network?: Network;
+  chainIdStr?: string
 
-  setAccount: (account: PuzzleAccount | undefined) => void;
-  setChainId: (chainId: string) => void;
+  setAddress: (address: string | undefined) => void;
+  setNetwork: (network: Network | undefined) => void;
   onDisconnect: () => void;
 };
 
@@ -16,17 +18,23 @@ export const useWalletStore = create<WalletState>()(
   persist(
     (set, get) => ({
       account: undefined,
-      chainId: 'aleo:1', // todo - figure out how to populate this from useConnect
-      setAccount: (account: PuzzleAccount | undefined) => {
-        set({ account });
+      chainIdStr: undefined, // 'aleo:0' | 'aleo:1'
+      network: undefined,
+      setAddress: (address) => {
+        set({ address });
       },
-      setChainId: (chainId: string) => {
-        set({ chainId });
+      setNetwork: (network) => {
+        const chainIdStr = network ? networkToChainId(network) : undefined;
+        set({
+          network,
+          chainIdStr
+        });
       },
       onDisconnect: () => {
         set({
-          account: undefined,
-          chainId: undefined,
+          address: undefined,
+          chainIdStr: undefined,
+          network: undefined,
         });
         queryClient.clear();
         localStorage.removeItem('puzzle-hasInjectedConnection');

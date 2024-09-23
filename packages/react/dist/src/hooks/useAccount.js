@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { hasInjectedConnection, } from '@puzzlehq/sdk-core';
+import { useEffect, useMemo } from 'react';
+import { chainIdToNetwork, hasInjectedConnection, wc_aleo_chains, } from '@puzzlehq/sdk-core';
 import { useOnSessionDelete } from './wc/useOnSessionDelete.js';
 import { useOnSessionUpdate } from './wc/useOnSessionUpdate.js';
 import { useOnSessionEvent } from './wc/useOnSessionEvent.js';
@@ -21,9 +21,12 @@ export const shortenAddress = (address, aleo = true, length = 4, short = true) =
 };
 export const useAccount = () => {
     const session = useWalletSession();
-    const [account, setAccount, onDisconnect] = useWalletStore((state) => [
-        state.account,
-        state.setAccount,
+    const [address, network, chainIdStr, setAddress, setNetwork, onDisconnect] = useWalletStore((state) => [
+        state.address,
+        state.network,
+        state.chainIdStr,
+        state.setAddress,
+        state.setNetwork,
         state.onDisconnect,
     ]);
     const useQueryFunction = hasInjectedConnection()
@@ -31,7 +34,7 @@ export const useAccount = () => {
         : useRequestQuery;
     const query = {
         topic: session?.topic,
-        chainId: account ? `${account.network}:${account.chainId}` : 'aleo:1',
+        chainId: chainIdStr,
         request: {
             jsonrpc: '2.0',
             method: 'getSelectedAccount',
@@ -56,14 +59,22 @@ export const useAccount = () => {
                     return !!data?.address;
                 },
                 onData: (data) => {
-                    const network = data.chain?.split(':')[0] ?? 'aleo';
+                    if (!session)
+                        return;
+                    setAddress(data.address);
+                    const wcNetwork = data.chain?.split(':')[0] ?? 'aleo';
                     const chainId = data.chain?.split(':')[1] ?? '1';
-                    setAccount({
-                        network,
-                        chainId,
-                        address: data.address,
-                        shortenedAddress: shortenAddress(data.address),
-                    });
+                    const chainStr = `${wcNetwork}:${chainId}`;
+                    const network = chainIdStr ? chainIdToNetwork(chainIdStr) : undefined;
+                    if (!wc_aleo_chains.includes(chainStr)) {
+                        console.error(`invalid network: ${chainStr}`);
+                        return;
+                    }
+                    if (!session.namespaces.aleo?.chains?.includes(chainStr)) {
+                        // console.warn(`unauthorized network: ${chainStr}`);
+                        return;
+                    }
+                    setNetwork(network);
                 },
                 dependencies: [],
             },
@@ -77,26 +88,40 @@ export const useAccount = () => {
             session &&
             session.topic === topic) {
             const address = params.event.address ?? params.event.data.address;
-            const network = params.chainId.split(':')[0];
+            setAddress(address);
+            const wcNetwork = params.chainId.split(':')[0];
             const chainId = params.chainId.split(':')[1];
-            setAccount({
-                network,
-                chainId,
-                address,
-                shortenedAddress: shortenAddress(address),
-            });
+            const chainStr = `${wcNetwork}:${chainId}`;
+            const network = chainIdStr ? chainIdToNetwork(chainIdStr) : undefined;
+            if (!wc_aleo_chains.includes(chainStr)) {
+                console.error(`invalid network: ${chainStr}`);
+                return;
+            }
+            if (!session.namespaces.aleo?.chains?.includes(chainStr)) {
+                // console.warn(`unauthorized network: ${chainStr}`);
+                return;
+            }
+            setNetwork(network);
         }
     });
     useOnSessionUpdate(({ params, topic }) => {
+        if (!session)
+            return;
         const address = params.event.address ?? params.event.data.address;
-        const network = params.chainId.split(':')[0];
+        setAddress(address);
+        const wcNetwork = params.chainId.split(':')[0];
         const chainId = params.chainId.split(':')[1];
-        setAccount({
-            network,
-            chainId,
-            address,
-            shortenedAddress: shortenAddress(address),
-        });
+        const chainStr = `${wcNetwork}:${chainId}`;
+        const network = chainIdToNetwork(chainStr);
+        if (!wc_aleo_chains.includes(chainStr)) {
+            console.error(`invalid network: ${chainStr}`);
+            return;
+        }
+        if (!session.namespaces.aleo?.chains?.includes(chainStr)) {
+            // console.warn(`unauthorized network: ${chainStr}`);
+            return;
+        }
+        setNetwork(network);
     });
     useOnSessionDelete(() => {
         onDisconnect();
@@ -113,16 +138,42 @@ export const useAccount = () => {
             const puzzleData = wc_data;
             const account = puzzleData?.account;
             if (account) {
-                setAccount(account);
+                const address = account.address;
+                setAddress(address);
+                const wcNetwork = account.network;
+                const chainId = account.chainId;
+                const chainStr = `${wcNetwork}:${chainId}`;
+                const network = chainIdToNetwork(chainStr);
+                if (!wc_aleo_chains.includes(chainStr)) {
+                    console.error(`invalid network: ${chainStr}`);
+                    return;
+                }
+                if (!session?.namespaces.aleo?.chains?.includes(chainStr)) {
+                    // console.warn(`unauthorized network: ${chainStr}`);
+                    return;
+                }
+                setNetwork(network);
             }
         }
     }, [wc_data]);
     const error = wc_error
         ? wc_error.message
         : wc_data && wc_data.error;
+    const account = useMemo(() => {
+        if (address && chainIdStr) {
+            return {
+                address,
+                network: chainIdStr.split(':')[0],
+                chainId: chainIdStr.split(':')[1],
+                shortenedAddress: shortenAddress(address)
+            };
+        }
+        return undefined;
+    }, [address, chainIdStr]);
     return {
         account,
         error,
         loading,
+        network
     };
 };

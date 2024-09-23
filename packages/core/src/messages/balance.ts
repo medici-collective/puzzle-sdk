@@ -1,11 +1,12 @@
 import { SessionTypes } from '@walletconnect/types';
 import { getWalletConnectModalSignClient } from '../client.js';
 import { hasInjectedConnection } from '../utils/clientInfo.js';
-import { wc_aleo_chains } from '../data/walletconnect.js';
-import { Balance } from '@puzzlehq/types';
+import { networkToChainId, wc_aleo_chains } from '../data/walletconnect.js';
+import { Balance, Network } from '@puzzlehq/types';
 
 export type GetBalancesRequest = {
   address?: string;
+  network?: Network
 };
 
 export type GetBalancesResponse = {
@@ -16,10 +17,7 @@ export type GetBalancesResponse = {
 export const getBalance = async ({
   address,
   network,
-}: {
-  address?: string;
-  network?: string;
-}): Promise<GetBalancesResponse> => {
+}: GetBalancesRequest): Promise<GetBalancesResponse> => {
   const connection = await getWalletConnectModalSignClient();
   const session: SessionTypes.Struct | undefined =
     await connection.getSession();
@@ -28,13 +26,13 @@ export const getBalance = async ({
     return { error: 'no session or connection' };
   }
 
-  if (network && !wc_aleo_chains.includes(network)) {
+  if (network && !wc_aleo_chains.includes(networkToChainId(network))) {
     return { error: 'network not in wc_aleo_chains' };
   }
 
   const query = {
     topic: session.topic,
-    chainId: network ?? 'aleo:1',
+    chainId: network ? networkToChainId(network) : 'aleo:0',
     request: {
       jsonrpc: '2.0',
       method: 'getBalance',
