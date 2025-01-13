@@ -1,13 +1,13 @@
-import { EventType, wc_aleo_chains } from '../index.js';
-import { getWalletConnectModalSignClient } from '../client.js';
-import { SessionTypes } from '@walletconnect/types';
-import { type RecordWithPlaintext } from '@puzzlehq/types';
+import { EventType, GenericRequest, hasInjectedConnection } from '../index.js';
+import { Network, type RecordWithPlaintext } from '@puzzlehq/types';
+import { SdkError } from '../data/errors.js';
 
 export type SettlementStatus = 'Settled' | 'SettledWithRecords' | 'Pending' | 'Creating' | 'Failed'
 
 /// dapps send this to the sdk
 export type CreateEventRequestData = {
   address?: string;
+  network?: Network;
   type: EventType;
   programId: string;
   functionId: string;
@@ -25,6 +25,7 @@ export type CreateEventRequestData = {
 /// sdk maps records to ciphertexts
 export type CreateEventRequest = {
   address?: string;
+  network?: Network;
   type: EventType;
   programId: string;
   functionId: string;
@@ -37,21 +38,14 @@ export type CreateEventRequest = {
 /// wallet passes this back to dapp
 export type CreateEventResponse = {
   eventId?: string;
-  /// pass in whole event here?
   error?: string;
 };
 
 export const requestCreateEvent = async (
   requestData: CreateEventRequestData,
-  network?: string,
 ): Promise<CreateEventResponse> => {
-  const connection = await getWalletConnectModalSignClient();
-  const session: SessionTypes.Struct | undefined =
-    await connection?.getSession();
-
-  if (!session || !connection) {
-    return { error: 'no session or connection' };
-  }
+  if (!hasInjectedConnection()) throw new Error(SdkError.PuzzleWalletNotDetected);
+  if (!window.aleo.puzzleWalletClient.requestCreateEvent?.mutate) throw new Error('requestCreateEvent.mutate not found!')
 
   const inputs = requestData?.inputs.map((input) => {
     if (typeof input === 'string') {
@@ -60,23 +54,17 @@ export const requestCreateEvent = async (
     return input.plaintext;
   });
 
-  if (network && !wc_aleo_chains.includes(network)) {
-    return { error: 'network not in wc_aleo_chains' };
+  const req: GenericRequest = {
+    method: 'requestCreateEvent',
+    params: {
+      ...requestData,
+      inputs,
+    } as CreateEventRequest,
   }
 
   try {
-    const response: CreateEventResponse = await connection.request({
-      topic: session.topic,
-      chainId: network ?? 'aleo:1',
-      request: {
-        jsonrpc: '2.0',
-        method: 'requestCreateEvent',
-        params: {
-          ...requestData,
-          inputs,
-        } as CreateEventRequest,
-      },
-    });
+    const response: CreateEventResponse =
+      await window.aleo.puzzleWalletClient.requestCreateEvent.mutate(req);
     return response;
   } catch (e) {
     console.error('createEvent error', e);

@@ -1,29 +1,35 @@
 import { useEffect } from 'react';
 import { hasInjectedConnection, } from '@puzzlehq/sdk-core';
-const useInjectedSubscriptions = ({ session, configs, }) => {
+const useInjectedSubscriptions = ({ configs, }) => {
     useEffect(() => {
-        if (!hasInjectedConnection() || !session) {
+        if (!hasInjectedConnection()) {
             return;
         }
-        const subscriptions = configs.map(({ subscriptionName, condition, onData }) => {
-            const subscription = window.aleo.puzzleWalletClient[subscriptionName].subscribe({ sessionTopic: session.topic }, {
-                onData(data) {
-                    if (condition(data)) {
-                        onData(data);
-                    }
-                },
-                onError(err) {
-                    console.error(`${subscriptionName} tRPC subscription error:`, err);
-                },
-            });
-            return subscription;
+        const subscriptions = configs.map(({ subscriptionName, condition, onData: _onData, onError: _onError }) => {
+            try {
+                const subscription = (window.aleo.puzzleWalletClient[subscriptionName]).subscribe({ method: subscriptionName }, {
+                    onData(data) {
+                        if (condition(data)) {
+                            _onData(data);
+                        }
+                    },
+                    onError(e) {
+                        console.error(`${subscriptionName} tRPC subscription error:`, e);
+                        _onError(e);
+                    },
+                });
+                return subscription;
+            }
+            catch (e) {
+                console.error(e);
+            }
         });
         // Cleanup on unmount or when dependencies change
         return () => {
             subscriptions.forEach((subscription) => {
-                subscription.unsubscribe();
+                subscription?.unsubscribe();
             });
         };
-    }, [session?.topic, ...configs.flatMap((config) => config.dependencies)]);
+    }, [...configs.flatMap((config) => config.dependencies)]);
 };
 export default useInjectedSubscriptions;

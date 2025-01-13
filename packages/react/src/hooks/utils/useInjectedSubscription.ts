@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { SessionTypes } from '@walletconnect/types';
 import {
   AccountSelectedResponse,
   AccountSyncedResponse,
@@ -8,55 +7,59 @@ import {
 
 type SubscriptionConfig = {
   subscriptionName: string;
-  condition: (data: AccountSelectedResponse) => boolean;
-  onData: (data: AccountSelectedResponse) => void;
+  condition: (data: AccountSelectedResponse | AccountSyncedResponse | void) => boolean;
+  onData: (data: AccountSelectedResponse | AccountSyncedResponse | void) => void;
+  onError: (error: Error) => void;
   dependencies: any[];
 };
 
 type UseInjectedSubscriptionsParams = {
-  session: SessionTypes.Struct | undefined;
   configs: SubscriptionConfig[];
 };
 
 const useInjectedSubscriptions = ({
-  session,
   configs,
 }: UseInjectedSubscriptionsParams) => {
   useEffect(() => {
-    if (!hasInjectedConnection() || !session) {
+    if (!hasInjectedConnection()) {
       return;
     }
     const subscriptions = configs.map(
-      ({ subscriptionName, condition, onData }) => {
-        const subscription = window.aleo.puzzleWalletClient[
-          subscriptionName
-        ].subscribe(
-          { sessionTopic: session.topic },
-          {
-            onData(data: AccountSelectedResponse | AccountSyncedResponse) {
-              if (condition(data)) {
-                onData(data);
-              }
+      ({ subscriptionName, condition, onData: _onData, onError: _onError }) => {
+        try {
+          const subscription = (window.aleo.puzzleWalletClient[
+            subscriptionName
+          ]).subscribe(
+            { method: subscriptionName },
+            {
+              onData(data: AccountSelectedResponse | AccountSyncedResponse | void) {
+                if (condition(data)) {
+                  _onData(data);
+                }
+              },
+              onError(e: Error) {
+                console.error(
+                  `${subscriptionName} tRPC subscription error:`,
+                  e,
+                );
+                _onError(e);
+              },
             },
-            onError(err: Error) {
-              console.error(
-                `${subscriptionName} tRPC subscription error:`,
-                err,
-              );
-            },
-          },
-        );
-        return subscription;
+          );
+          return subscription;
+        } catch (e) {
+          console.error(e);
+        }
       },
     );
 
     // Cleanup on unmount or when dependencies change
     return () => {
       subscriptions.forEach((subscription) => {
-        subscription.unsubscribe();
+        subscription?.unsubscribe();
       });
     };
-  }, [session?.topic, ...configs.flatMap((config) => config.dependencies)]);
+  }, [...configs.flatMap((config) => config.dependencies)]);
 };
 
 export default useInjectedSubscriptions;

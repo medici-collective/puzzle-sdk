@@ -1,17 +1,17 @@
-import { SessionTypes } from '@walletconnect/types';
-import { useRequest } from './wc/useRequest.js';
+import { useInjectedRequest } from './utils/useRequest.js';
 import {
   CreateEventRequest,
   CreateEventRequestData,
   CreateEventResponse,
+  GenericRequest,
   log_sdk,
   SettlementStatus,
 } from '@puzzlehq/sdk-core';
-import { useWalletSession } from '../provider/PuzzleWalletProvider.js';
+import { useIsConnected } from '../provider/PuzzleWalletProvider.js';
 import { useWalletStore } from '../store.js';
 import { RecordWithPlaintext } from '@puzzlehq/types';
 import { useEvent } from './useEvent.js';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { EventStatus } from '@puzzlehq/types';
 
 const normalizeInputs = (inputs?: (string | RecordWithPlaintext)[]) => {
@@ -24,28 +24,35 @@ const normalizeInputs = (inputs?: (string | RecordWithPlaintext)[]) => {
 };
 
 export const useRequestCreateEvent = (requestData?: CreateEventRequestData) => {
-  const session: SessionTypes.Struct | undefined = useWalletSession();
+  const {isConnected} = useIsConnected();
   const [account] = useWalletStore((state) => [state.account]);
   const [settlementStatus, setSettlementStatus] = useState<SettlementStatus | undefined>(undefined);
 
   const inputs = normalizeInputs(requestData?.inputs);
+  
+  const req: GenericRequest = {
+    method: 'requestCreateEvent',
+    params: {
+      ...requestData,
+      inputs,
+    } as CreateEventRequest,
+  }
 
   const {
     request,
     data: wc_data,
     error: wc_error,
     loading,
-  } = useRequest<CreateEventResponse | undefined>({
-    topic: session?.topic ?? '',
-    chainId: account ? `${account.network}:${account.chainId}` : 'aleo:1',
-    request: {
-      jsonrpc: '2.0',
-      method: 'requestCreateEvent',
-      params: {
-        ...requestData,
-        inputs,
-      } as CreateEventRequest,
-    },
+  } = useInjectedRequest<CreateEventResponse | undefined>(req, async () => {
+    try {
+      const response: CreateEventResponse =
+        await window.aleo.puzzleWalletClient.requestCreateEvent.mutate(req);
+      return response;
+    } catch (e) {
+      console.error('createEvent error', e);
+      const error = (e as Error).message;
+      return { error };
+    }
   });
 
   const error: string | undefined = wc_error
@@ -55,33 +62,28 @@ export const useRequestCreateEvent = (requestData?: CreateEventRequestData) => {
 
   const createEvent = useCallback((createEventRequestOverride?: CreateEventRequest) => {
     setSettlementStatus(undefined);
-    if (createEventRequestOverride && session && !loading) {
+    if (createEventRequestOverride && isConnected && !loading) {
       log_sdk(
         'useCreateEvent requesting with override...',
         createEventRequestOverride,
       );
       const inputs = normalizeInputs(createEventRequestOverride.inputs);
       return request({
-        topic: session?.topic ?? '',
-        chainId: account ? `${account.network}:${account.chainId}` : 'aleo:1',
-        request: {
-          jsonrpc: '2.0',
-          method: 'requestCreateEvent',
-          params: {
-            ...createEventRequestOverride,
-            inputs,
-          } as CreateEventRequest,
-        },
+        method: 'requestCreateEvent',
+        params: {
+          ...createEventRequestOverride,
+          inputs,
+        } as CreateEventRequest,
       });
-    } else if (requestData && session && !loading) {
+    } else if (requestData && isConnected && !loading) {
       log_sdk('useCreateEvent requesting...', requestData);
       return request();
     }
-  }, [session?.topic, JSON.stringify(account), loading, request]);
+  }, [isConnected, JSON.stringify(account), loading, request]);
 
   const eventId = response?.eventId ?? requestData?.settlementInfo?.eventId
 
-  const { event, error: eventFetchError } = useEvent({ id: eventId, address: requestData?.address });
+  const { event, error: eventFetchError } = useEvent({ id: eventId ?? '', address: requestData?.address });
 
   useEffect(() => {
     console.log('eventId', eventId);
